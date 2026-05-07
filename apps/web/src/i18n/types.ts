@@ -1554,4 +1554,12 @@ export interface Dict {
   'feedback.commentSubmit': string;
   'feedback.commentSaved': string;
   'feedback.change': string;
+
+  // Diagnostics export
+  'diagnostics.exportTitle': string;
+  'diagnostics.exportButton': string;
+  'diagnostics.exportHint': string;
+  'diagnostics.exporting': string;
+  'diagnostics.exportSuccess': string;
+  'diagnostics.exportFailed': string;
 }
