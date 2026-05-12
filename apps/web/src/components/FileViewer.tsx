@@ -3055,6 +3055,70 @@ function HtmlViewer({
   onFileSaved?: () => Promise<void> | void;
 }) {
   const t = useT();
+  const analytics = useAnalytics();
+  // Shared helper for the share menu: emit studio_click share_option on
+  // entry and artifact_export_result on resolution. Sync exports report
+  // success immediately after the call returns; async exports get .then
+  // / .catch. The same request_id threads both events so PostHog can
+  // stitch click → result via $insert_id correlation.
+  const fireShareExport = (
+    format:
+      | 'pdf'
+      | 'pptx'
+      | 'zip'
+      | 'html'
+      | 'markdown'
+      | 'template'
+      | 'vercel'
+      | 'cloudflare_pages',
+    fn: () => Promise<unknown> | unknown,
+  ) => {
+    const requestId = analytics.newRequestId();
+    const artifactId = anonymizeArtifactId({ projectId, fileName: file.name });
+    trackStudioClickShareOption(
+      analytics.track,
+      {
+        page: 'studio',
+        area: 'app_header',
+        artifact_id: artifactId,
+        element: 'share_option',
+        action: 'select_share_option',
+        share_context: 'artifact',
+        export_format: format,
+      },
+      { requestId },
+    );
+    const started = performance.now();
+    const finish = (result: 'success' | 'failed' | 'cancelled', errorCode?: string) => {
+      trackArtifactExportResult(
+        analytics.track,
+        {
+          page: 'studio',
+          area: 'app_header',
+          artifact_id: artifactId,
+          project_id: projectId,
+          export_format: format,
+          result,
+          ...(errorCode ? { error_code: errorCode } : {}),
+          export_duration_ms: Math.round(performance.now() - started),
+        },
+        { requestId },
+      );
+    };
+    try {
+      const out = fn();
+      if (out && typeof (out as Promise<unknown>).then === 'function') {
+        (out as Promise<unknown>).then(
+          () => finish('success'),
+          (err) => finish('failed', err instanceof Error ? err.name : 'UNKNOWN'),
+        );
+      } else {
+        finish('success');
+      }
+    } catch (err) {
+      finish('failed', err instanceof Error ? err.name : 'UNKNOWN');
+    }
+  };
   const [mode, setMode] = useState<'preview' | 'source'>('preview');
   const [source, setSource] = useState<string | null>(liveHtml ?? null);
   const [inlinedSource, setInlinedSource] = useState<string | null>(null);
@@ -4658,13 +4722,13 @@ function HtmlViewer({
                     role="menuitem"
                     onClick={() => {
                       setShareMenuOpen(false);
-                      void exportProjectAsPdf({
+                      fireShareExport('pdf', () => exportProjectAsPdf({
                         deck: effectiveDeck,
                         fallbackPdf: () => exportAsPdf(source ?? '', exportTitle, { deck: effectiveDeck }),
                         filePath: file.name,
                         projectId,
                         title: exportTitle,
-                      });
+                      }));
                     }}
                   >
                     <span className="share-menu-icon"><Icon name="file" size={14} /></span>
@@ -4688,7 +4752,9 @@ function HtmlViewer({
                     }
                     onClick={() => {
                       setShareMenuOpen(false);
-                      if (onExportAsPptx) onExportAsPptx(file.name);
+                      fireShareExport('pptx', () => {
+                        if (onExportAsPptx) onExportAsPptx(file.name);
+                      });
                     }}
                   >
                     <span className="share-menu-icon"><Icon name="present" size={14} /></span>
@@ -4701,12 +4767,12 @@ function HtmlViewer({
                     role="menuitem"
                     onClick={() => {
                       setShareMenuOpen(false);
-                      void exportProjectAsZip({
+                      fireShareExport('zip', () => exportProjectAsZip({
                         projectId,
                         filePath: file.name,
                         fallbackHtml: source ?? '',
                         fallbackTitle: exportTitle,
-                      });
+                      }));
                     }}
                   >
                     <span className="share-menu-icon"><Icon name="download" size={14} /></span>
@@ -4718,7 +4784,7 @@ function HtmlViewer({
                     role="menuitem"
                     onClick={() => {
                       setShareMenuOpen(false);
-                      exportAsHtml(source ?? '', exportTitle);
+                      fireShareExport('html', () => exportAsHtml(source ?? '', exportTitle));
                     }}
                   >
                     <span className="share-menu-icon"><Icon name="file-code" size={14} /></span>
@@ -4736,7 +4802,7 @@ function HtmlViewer({
                     role="menuitem"
                     onClick={() => {
                       setShareMenuOpen(false);
-                      exportAsMd(source ?? '', exportTitle);
+                      fireShareExport('markdown', () => exportAsMd(source ?? '', exportTitle));
                     }}
                   >
                     <span className="share-menu-icon"><Icon name="file" size={14} /></span>
@@ -4749,7 +4815,9 @@ function HtmlViewer({
                     role="menuitem"
                     disabled={savingTemplate}
                     onClick={() => {
-                      openSaveAsTemplateModal();
+                      fireShareExport('template', () => {
+                        openSaveAsTemplateModal();
+                      });
                     }}
                   >
                     <span className="share-menu-icon"><Icon name="copy" size={14} /></span>
@@ -4769,7 +4837,13 @@ function HtmlViewer({
                       className="share-menu-item"
                       role="menuitem"
                       onClick={() => {
-                        void openDeployModal(option.id);
+                        const format =
+                          option.id === 'cloudflare-pages'
+                            ? 'cloudflare_pages'
+                            : option.id === 'vercel-self'
+                              ? 'vercel'
+                              : 'vercel';
+                        fireShareExport(format, () => openDeployModal(option.id));
                       }}
                     >
                       <span className="share-menu-icon"><Icon name="upload" size={14} /></span>
