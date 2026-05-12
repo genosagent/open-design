@@ -1,5 +1,10 @@
 import type { Express } from 'express';
 import type { RouteDeps } from './server-context.js';
+import { newInsertId } from './analytics.js';
+import {
+  agentIdToTracking,
+  projectKindToTracking,
+} from '@open-design/contracts/analytics';
 
 export interface RegisterChatRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'chat' | 'agents' | 'critique' | 'validation' | 'lifecycle'> {}
 
@@ -60,6 +65,76 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
     res.status(202).json(body);
     design.runs.start(run, () => startChatRun(req.body || {}, run));
     reconcileAssistantMessageOnRunEnd(db, design.runs, run);
+
+    // Analytics: emit run_created (daemon-side, authoritative) and
+    // schedule a run_finished emission on wait() resolution. Both events
+    // use the same insert_id so PostHog dedupes against the web mirror
+    // that fires on SSE start/end. No-op when POSTHOG_KEY is unset.
+    const context = design.readAnalyticsContext?.(req);
+    if (context) {
+      const reqBody = (req.body || {}) as Record<string, unknown>;
+      const runInsertId = newInsertId();
+      const runStartedAt = Date.now();
+      const baseProps: Record<string, unknown> = {
+        page: 'studio',
+        area: 'chat_composer',
+        project_id: typeof reqBody.projectId === 'string' ? reqBody.projectId : null,
+        conversation_id:
+          typeof reqBody.conversationId === 'string' ? reqBody.conversationId : null,
+        run_id: run.id,
+        project_kind: null,
+        design_system_id:
+          typeof reqBody.designSystemId === 'string'
+            ? reqBody.designSystemId
+            : undefined,
+        design_system_source: 'unknown',
+        has_attachment: Array.isArray(reqBody.attachments)
+          ? (reqBody.attachments as unknown[]).length > 0
+          : false,
+        user_query_tokens: 0,
+        model_id: typeof reqBody.model === 'string' ? reqBody.model : null,
+        agent_provider_id:
+          typeof reqBody.agentId === 'string'
+            ? agentIdToTracking(reqBody.agentId)
+            : null,
+        skill_id: typeof reqBody.skillId === 'string' ? reqBody.skillId : null,
+        mcp_id: null,
+        token_count_source: 'unknown',
+      };
+      design.analytics.capture({
+        eventName: 'run_created',
+        context,
+        appVersion: design.getAppVersion?.() ?? '0.0.0',
+        properties: baseProps,
+        insertId: runInsertId,
+      });
+      // Run lifecycle hook: emit run_finished when the run reaches a
+      // terminal state. The same context is reused — captures are
+      // synchronous and never block the run.
+      design.runs.wait(run).then((status: { status: string }) => {
+        const result =
+          status.status === 'succeeded'
+            ? 'success'
+            : status.status === 'canceled'
+              ? 'cancelled'
+              : 'failed';
+        design.analytics.capture({
+          eventName: 'run_finished',
+          context,
+          appVersion: design.getAppVersion?.() ?? '0.0.0',
+          properties: {
+            ...baseProps,
+            area: 'chat_panel',
+            result,
+            artifact_count: 0,
+            total_duration_ms: Date.now() - runStartedAt,
+          },
+          insertId: `${runInsertId}-finish`,
+        });
+      }).catch(() => {
+        // wait() can't reject in current runs.ts impl, but guard anyway.
+      });
+    }
   });
 
   app.get('/api/runs', (req, res) => {
