@@ -1,0 +1,46 @@
+name: Deploy Open Design to Vercel
+
+on:
+  push:
+    branches:
+      - main
+      - genos/hermes-shared-skills-preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-production-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy production
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Link Vercel project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s","projectName":"open-design-genos"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull Vercel production environment
+        run: npx vercel@53.4.0 pull --yes --environment=production --scope genosagents-projects --token "$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel production
+        run: npx vercel@53.4.0 deploy --prod --yes --scope genosagents-projects --token "$VERCEL_TOKEN"
