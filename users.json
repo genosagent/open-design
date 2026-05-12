@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "users": [
+    {
+      "id": "6d38695fa2a8473b467f6ef426b10084",
+      "username": "testuser",
+      "email": "test@example.com",
+      "passwordHash": "195f6625d910d22917bd44924b9b424ae40de681587e58a2c11152898693c783",
+      "passwordSalt": "083954be6ba8bf0b40b5e9bdd006c39e",
+      "passwordIterations": 210000,
+      "role": "admin",
+      "createdAt": "2026-05-12T12:07:41.492Z",
+      "updatedAt": "2026-05-12T12:07:41.492Z"
+    }
+  ]
+}
