@@ -86,8 +86,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <form action='/api/auth/login' method='post' style={{ display: 'grid', gap: 16 }}>
           <input type='hidden' name='next' value={next} />
           <label style={{ display: 'grid', gap: 8 }}>
-            <span style={{ color: '#e8dfd1', fontSize: 14, fontWeight: 600 }}>Username</span>
-            <input name='user' autoComplete='username' required style={input} />
+            <span style={{ color: '#e8dfd1', fontSize: 14, fontWeight: 600 }}>Username or email</span>
+            <input name='login' autoComplete='username' required style={input} />
           </label>
           <label style={{ display: 'grid', gap: 8 }}>
             <span style={{ color: '#e8dfd1', fontSize: 14, fontWeight: 600 }}>Password</span>
@@ -99,7 +99,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <p style={{ margin: '18px 0 0', color: '#b8ad9d', fontSize: 14, textAlign: 'center' }}>
           Need access?{' '}
           <Link href={`/signup${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`} style={{ color: '#f0c36a', fontWeight: 700 }}>
-            Sign up with invite code
+            Sign up
           </Link>
         </p>
       </section>

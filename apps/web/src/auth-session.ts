@@ -1,6 +1,14 @@
 const COOKIE_NAME = 'open_design_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 
+type SessionPayload = {
+  v: 1;
+  sub: string;
+  username: string;
+  role: string;
+  exp: number;
+};
+
 function getSecret() {
   return process.env.OPEN_DESIGN_AUTH_SECRET || process.env.OPEN_DESIGN_AUTH_PASSWORD || '';
 }
@@ -15,10 +23,43 @@ function bytesToHex(bytes: Uint8Array) {
     .join('');
 }
 
-function safeEquals(a: string, b: string) {
-  if (a.length !== b.length) return false;
+function hexToBytes(value: string) {
+  if (value.length % 2 !== 0) return new Uint8Array();
+  const out = new Uint8Array(value.length / 2);
+  for (let i = 0; i < out.length; i += 1) out[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+function bytesToBase64Url(bytes: Uint8Array) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]!);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64UrlToBytes(value: string) {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function safeHexEquals(a: string, b: string) {
+  const aBytes = hexToBytes(a);
+  const bBytes = hexToBytes(b);
+  if (aBytes.length !== bBytes.length || aBytes.length === 0) return false;
   let out = 0;
-  for (let i = 0; i < a.length; i += 1) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < aBytes.length; i += 1) out |= aBytes[i]! ^ bBytes[i]!;
+  return out === 0;
+}
+
+function safeStringEquals(a: string, b: string) {
+  const encoder = getEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  if (aBytes.length !== bBytes.length || aBytes.length === 0) return false;
+  let out = 0;
+  for (let i = 0; i < aBytes.length; i += 1) out |= aBytes[i]! ^ bBytes[i]!;
   return out === 0;
 }
 
@@ -44,39 +85,44 @@ export function sessionTtlSeconds() {
   return SESSION_TTL_SECONDS;
 }
 
-export async function createSessionToken(now = Date.now()) {
-  const expires = now + SESSION_TTL_SECONDS * 1000;
-  const payload = `v1.${expires}`;
-  const signature = await sign(payload);
-  return `${payload}.${signature}`;
+export async function createSessionToken(user: { id: string; username: string; role: string }, now = Date.now()) {
+  const payload: SessionPayload = {
+    v: 1,
+    sub: user.id,
+    username: user.username,
+    role: user.role,
+    exp: now + SESSION_TTL_SECONDS * 1000,
+  };
+  const encodedPayload = bytesToBase64Url(getEncoder().encode(JSON.stringify(payload)));
+  const signature = await sign(encodedPayload);
+  return `v1.${encodedPayload}.${signature}`;
 }
 
 export async function verifySessionToken(token: string | undefined | null, now = Date.now()) {
   if (!token) return false;
-  const [version, expiresRaw, signature] = token.split('.');
-  if (!version || !expiresRaw || !signature || version !== 'v1') return false;
-  const expires = Number(expiresRaw);
-  if (!Number.isFinite(expires) || expires <= now) return false;
-  const payload = `${version}.${expiresRaw}`;
-  const expected = await sign(payload);
-  return Boolean(expected) && safeEquals(signature, expected);
+  const [version, encodedPayload, signature] = token.split('.');
+  if (version !== 'v1' || !encodedPayload || !signature) return false;
+  const expected = await sign(encodedPayload);
+  if (!expected || !safeHexEquals(signature, expected)) return false;
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(base64UrlToBytes(encodedPayload))) as Partial<SessionPayload>;
+    return payload.v === 1 && typeof payload.exp === 'number' && payload.exp > now && Boolean(payload.sub);
+  } catch {
+    return false;
+  }
 }
 
 export function authIsConfigured() {
-  return Boolean(process.env.OPEN_DESIGN_AUTH_USER && process.env.OPEN_DESIGN_AUTH_PASSWORD);
+  return Boolean(
+    process.env.OPEN_DESIGN_AUTH_SECRET ||
+      process.env.OPEN_DESIGN_AUTH_PASSWORD ||
+      process.env.OPEN_DESIGN_USER_STORE_GITHUB_TOKEN ||
+      process.env.OPEN_DESIGN_USER_STORE_FILE,
+  );
 }
 
-export function signupIsConfigured() {
-  return Boolean(process.env.OPEN_DESIGN_SIGNUP_CODE || process.env.OPEN_DESIGN_AUTH_PASSWORD);
-}
-
-export function credentialsAreValid(user: string, password: string) {
+export function legacyCredentialsAreValid(user: string, password: string) {
   const expectedUser = process.env.OPEN_DESIGN_AUTH_USER;
   const expectedPass = process.env.OPEN_DESIGN_AUTH_PASSWORD;
-  return Boolean(expectedUser && expectedPass && safeEquals(user, expectedUser) && safeEquals(password, expectedPass));
-}
-
-export function signupCodeIsValid(code: string) {
-  const expectedCode = process.env.OPEN_DESIGN_SIGNUP_CODE || process.env.OPEN_DESIGN_AUTH_PASSWORD;
-  return Boolean(expectedCode && safeEquals(code, expectedCode));
+  return Boolean(expectedUser && expectedPass && safeStringEquals(user, expectedUser) && safeStringEquals(password, expectedPass));
 }
