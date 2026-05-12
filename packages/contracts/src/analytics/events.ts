@@ -81,7 +81,20 @@ export type TrackingActiveSection =
   | 'language'
   | 'appearance'
   | 'pets'
-  | 'about';
+  | 'about'
+  // Worktree-branch sections that have no CSV counterpart yet. Emit them
+  // verbatim so PostHog dashboards can group them once the CSV catches up
+  // (tracking-doc-issues.md §2.6).
+  | 'connectors'
+  | 'mcp_client'
+  | 'orbit'
+  | 'routines'
+  | 'integrations'
+  | 'skills'
+  | 'design_systems'
+  | 'memory'
+  | 'privacy'
+  | 'notifications';
 
 export type TrackingCliProviderId =
   | 'claude_code'
@@ -210,10 +223,11 @@ export interface SettingsClickByokFieldProps {
   element: 'byok_field';
   action: 'focus_byok_field';
   field_id: 'api_key' | 'base_url' | 'model';
-  // provider_id intentionally narrows to the two protocols the UI actually
-  // surfaces; the wider CSV enum (azure_openai|google_gemini|ollama_cloud)
-  // doesn't correspond to any picker.
-  provider_id: 'anthropic' | 'openai';
+  // Code's `apiProtocol` is wider than the CSV's BYOK provider enum
+  // (anthropic|openai|azure|ollama|google). We forward the code value
+  // verbatim so dashboards can group by the actual protocol; the CSV enum
+  // is a strict subset the product team can revise.
+  provider_id: 'anthropic' | 'openai' | 'azure' | 'ollama' | 'google';
   has_value: boolean;
 }
 
@@ -423,8 +437,10 @@ export function topTabToTracking(tab: string): TrackingTopTabId {
   }
 }
 
-// Code `SettingsSection` from apps/web/src/components/SettingsDialog.tsx:
-//   'execution' | 'media' | 'language' | 'appearance' | 'pet' | 'about'
+// Code `SettingsSection` from apps/web/src/components/SettingsDialog.tsx
+// (16 sections in this worktree branch). Sections that have no CSV
+// counterpart still get emitted under the same event so dashboards can
+// group them once the CSV catches up.
 export function settingsSectionToTracking(
   section: string,
 ): TrackingActiveSection {
@@ -441,6 +457,25 @@ export function settingsSectionToTracking(
       return 'pets';
     case 'about':
       return 'about';
+    case 'composio':
+    case 'integrations':
+      return 'integrations';
+    case 'mcpClient':
+      return 'mcp_client';
+    case 'orbit':
+      return 'orbit';
+    case 'routines':
+      return 'routines';
+    case 'skills':
+      return 'skills';
+    case 'designSystems':
+      return 'design_systems';
+    case 'memory':
+      return 'memory';
+    case 'privacy':
+      return 'privacy';
+    case 'notifications':
+      return 'notifications';
     default:
       return 'execution_model';
   }
