@@ -66,8 +66,17 @@ export function authIsConfigured() {
   return Boolean(process.env.OPEN_DESIGN_AUTH_USER && process.env.OPEN_DESIGN_AUTH_PASSWORD);
 }
 
+export function signupIsConfigured() {
+  return Boolean(process.env.OPEN_DESIGN_SIGNUP_CODE || process.env.OPEN_DESIGN_AUTH_PASSWORD);
+}
+
 export function credentialsAreValid(user: string, password: string) {
   const expectedUser = process.env.OPEN_DESIGN_AUTH_USER;
   const expectedPass = process.env.OPEN_DESIGN_AUTH_PASSWORD;
   return Boolean(expectedUser && expectedPass && safeEquals(user, expectedUser) && safeEquals(password, expectedPass));
+}
+
+export function signupCodeIsValid(code: string) {
+  const expectedCode = process.env.OPEN_DESIGN_SIGNUP_CODE || process.env.OPEN_DESIGN_AUTH_PASSWORD;
+  return Boolean(expectedCode && safeEquals(code, expectedCode));
 }

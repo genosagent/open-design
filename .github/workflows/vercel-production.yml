@@ -4,7 +4,14 @@ on:
   push:
     branches:
       - main
-      - genos/hermes-shared-skills-preview
+    paths:
+      - .github/workflows/vercel-production.yml
+      - apps/web/**
+      - packages/**
+      - skills/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
   workflow_dispatch:
 
 permissions:

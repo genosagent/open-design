@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { authIsConfigured, sessionCookieName, verifySessionToken } from './src/auth-session';
 
 const PUBLIC_FILE = /\.[^/]+$/;
-const ALLOWED_PATHS = new Set(['/login', '/api/auth/login', '/api/auth/logout']);
+const ALLOWED_PATHS = new Set(['/login', '/signup', '/api/auth/login', '/api/auth/logout', '/api/auth/signup']);
 
 function isBypassed(pathname: string) {
   return (
