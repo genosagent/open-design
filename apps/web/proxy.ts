@@ -1,40 +1,40 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import { authIsConfigured, sessionCookieName, verifySessionToken } from './src/auth-session';
 
-function unauthorized() {
-  return new NextResponse('Authentication required', {
-    status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="Open Design"' },
-  });
+const PUBLIC_FILE = /\.[^/]+$/;
+const ALLOWED_PATHS = new Set(['/login', '/api/auth/login', '/api/auth/logout']);
+
+function isBypassed(pathname: string) {
+  return (
+    ALLOWED_PATHS.has(pathname) ||
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/app-icon') ||
+    pathname.startsWith('/logo') ||
+    pathname.startsWith('/avatar') ||
+    pathname.startsWith('/od-notifications-sw') ||
+    PUBLIC_FILE.test(pathname)
+  );
 }
 
-function safeEquals(a: string, b: string) {
-  if (a.length !== b.length) return false;
-  let out = 0;
-  for (let i = 0; i < a.length; i += 1) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return out === 0;
+function loginUrl(req: NextRequest) {
+  const url = req.nextUrl.clone();
+  url.pathname = '/login';
+  url.search = '';
+  const next = `${req.nextUrl.pathname}${req.nextUrl.search}`;
+  if (next !== '/') url.searchParams.set('next', next);
+  return url;
 }
 
-export function proxy(req: NextRequest) {
-  const user = process.env.OPEN_DESIGN_AUTH_USER;
-  const pass = process.env.OPEN_DESIGN_AUTH_PASSWORD;
+export async function proxy(req: NextRequest) {
+  if (!authIsConfigured()) return NextResponse.next();
+  if (isBypassed(req.nextUrl.pathname)) return NextResponse.next();
 
-  if (!user || !pass) return NextResponse.next();
+  const token = req.cookies.get(sessionCookieName())?.value;
+  if (await verifySessionToken(token)) return NextResponse.next();
 
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Basic ')) return unauthorized();
-
-  try {
-    const decoded = atob(auth.slice('Basic '.length));
-    const separator = decoded.indexOf(':');
-    if (separator === -1) return unauthorized();
-    const givenUser = decoded.slice(0, separator);
-    const givenPass = decoded.slice(separator + 1);
-    if (safeEquals(givenUser, user) && safeEquals(givenPass, pass)) return NextResponse.next();
-  } catch {
-    return unauthorized();
-  }
-
-  return unauthorized();
+  return NextResponse.redirect(loginUrl(req));
 }
 
 export const config = {
