@@ -11,6 +11,17 @@
       "role": "admin",
       "createdAt": "2026-05-12T12:07:41.492Z",
       "updatedAt": "2026-05-12T12:07:41.492Z"
+    },
+    {
+      "id": "9b44394cd5b2eab693f927163397efd3",
+      "username": "ensar",
+      "email": "ensaraytar@gmail.com",
+      "passwordHash": "d6678989ecdcc29507fff23f1cdd0c1d7b6cc7c85d7cbdc005f782dc0a253f27",
+      "passwordSalt": "619a6730155844aba0f0e55009432cab",
+      "passwordIterations": 210000,
+      "role": "member",
+      "createdAt": "2026-05-12T12:07:51.006Z",
+      "updatedAt": "2026-05-12T12:07:51.006Z"
     }
   ]
 }
