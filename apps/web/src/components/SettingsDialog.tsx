@@ -8,6 +8,8 @@ import {
 } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
 import {
+  trackSettingsByokTestResult,
+  trackSettingsCliTestResult,
   trackSettingsClickByokField,
   trackSettingsClickCliProviderCard,
   trackSettingsClickExecutionModeTab,
@@ -849,6 +851,8 @@ export function SettingsDialog({
     const revision = agentTestRevisionRef.current;
     agentTestAbortRef.current = controller;
     setAgentTestState({ status: 'running' });
+    const startedAt = performance.now();
+    const cliProviderId = agentIdToTracking(selected.id);
     const clearIfStale = () => {
       if (agentTestAbortRef.current === controller) {
         setAgentTestState({ status: 'idle' });
@@ -870,6 +874,14 @@ export function SettingsDialog({
         return;
       }
       setAgentTestState({ status: 'done', result });
+      trackSettingsCliTestResult(analytics.track, {
+        page: 'settings',
+        area: 'execution_model',
+        cli_provider_id: cliProviderId,
+        result: result.ok ? 'success' : 'failed',
+        ...(result.ok ? {} : { error_code: result.kind || 'UNKNOWN' }),
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (agentTestRevisionRef.current !== revision) {
@@ -886,6 +898,14 @@ export function SettingsDialog({
           detail: err instanceof Error ? err.message : 'Test request failed',
         },
       });
+      trackSettingsCliTestResult(analytics.track, {
+        page: 'settings',
+        area: 'execution_model',
+        cli_provider_id: cliProviderId,
+        result: 'failed',
+        error_code: err instanceof Error ? err.name : 'UNKNOWN',
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
     } finally {
       if (agentTestAbortRef.current === controller) {
         agentTestAbortRef.current = null;
@@ -901,6 +921,7 @@ export function SettingsDialog({
     const revision = providerTestRevisionRef.current;
     providerTestAbortRef.current = controller;
     setProviderTestState({ status: 'running' });
+    const startedAt = performance.now();
     const clearIfStale = () => {
       if (providerTestAbortRef.current === controller) {
         setProviderTestState({ status: 'idle' });
@@ -926,6 +947,14 @@ export function SettingsDialog({
         return;
       }
       setProviderTestState({ status: 'done', result });
+      trackSettingsByokTestResult(analytics.track, {
+        page: 'settings',
+        area: 'execution_model',
+        provider_id: apiProtocol,
+        result: result.ok ? 'success' : 'failed',
+        ...(result.ok ? {} : { error_code: result.kind || 'UNKNOWN' }),
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (providerTestRevisionRef.current !== revision) {
@@ -941,6 +970,14 @@ export function SettingsDialog({
           model: cfg.model,
           detail: err instanceof Error ? err.message : 'Test request failed',
         },
+      });
+      trackSettingsByokTestResult(analytics.track, {
+        page: 'settings',
+        area: 'execution_model',
+        provider_id: apiProtocol,
+        result: 'failed',
+        error_code: err instanceof Error ? err.name : 'UNKNOWN',
+        duration_ms: Math.round(performance.now() - startedAt),
       });
     } finally {
       if (providerTestAbortRef.current === controller) {

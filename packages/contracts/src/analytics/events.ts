@@ -5,8 +5,10 @@
 // specs/change/20260511-posthog-analytics/tracking-doc-issues.md), revise
 // those tables in one place.
 
-// 17 P0 events. P1/P2 are deliberately omitted; adding them later does not
-// bump EVENT_SCHEMA_VERSION as long as public params stay stable.
+// P0 events implemented in this branch. Two of the original CSV P0 events
+// (project_open_result, settings_click byok_provider_option) are out of
+// scope because the matching UI surfaces don't exist in this codebase —
+// see specs/change/20260511-posthog-analytics/tracking-doc-issues.md.
 export type AnalyticsEventName =
   | 'app_launch'
   | 'home_view'
@@ -14,15 +16,13 @@ export type AnalyticsEventName =
   | 'project_create_result'
   | 'settings_view'
   | 'settings_click'
+  | 'settings_cli_test_result'
+  | 'settings_byok_test_result'
   | 'studio_view'
   | 'studio_click'
   | 'run_created'
   | 'run_finished'
   | 'artifact_export_result';
-
-// Three P0 events are deferred until the product features they depend on
-// exist (project_open_result, settings_cli_test_result,
-// settings_byok_test_result). See tracking-doc-issues.md §1.
 
 // ---- Enums shared across events (CSV wire format) ------------------------
 
@@ -233,6 +233,24 @@ export interface SettingsClickByokFieldProps {
   has_value: boolean;
 }
 
+export interface SettingsCliTestResultProps {
+  page: 'settings';
+  area: 'execution_model';
+  cli_provider_id: TrackingCliProviderId;
+  result: 'success' | 'failed' | 'timeout';
+  error_code?: string;
+  duration_ms: number;
+}
+
+export interface SettingsByokTestResultProps {
+  page: 'settings';
+  area: 'execution_model';
+  provider_id: 'anthropic' | 'openai' | 'azure' | 'ollama' | 'google';
+  result: 'success' | 'failed' | 'timeout';
+  error_code?: string;
+  duration_ms: number;
+}
+
 export interface StudioViewChatPanelProps {
   page: 'studio';
   area: 'chat_panel';
@@ -345,6 +363,8 @@ export type AnalyticsEventPayload =
         | SettingsClickCliProviderCardProps
         | SettingsClickByokFieldProps;
     }
+  | { event: 'settings_cli_test_result'; props: SettingsCliTestResultProps }
+  | { event: 'settings_byok_test_result'; props: SettingsByokTestResultProps }
   | { event: 'studio_view'; props: StudioViewChatPanelProps | StudioViewArtifactProps }
   | { event: 'studio_click'; props: StudioClickChatComposerProps | StudioClickShareOptionProps }
   | { event: 'run_created'; props: RunCreatedProps }

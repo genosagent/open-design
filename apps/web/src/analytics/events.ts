@@ -13,9 +13,11 @@ import type {
   ProjectCreateResultProps,
   RunCreatedProps,
   RunFinishedProps,
+  SettingsByokTestResultProps,
   SettingsClickByokFieldProps,
   SettingsClickCliProviderCardProps,
   SettingsClickExecutionModeTabProps,
+  SettingsCliTestResultProps,
   SettingsViewProps,
   StudioClickChatComposerProps,
   StudioClickShareOptionProps,
@@ -87,6 +89,26 @@ export function trackSettingsClickByokField(
   props: SettingsClickByokFieldProps,
 ) {
   track('settings_click', props as unknown as Record<string, unknown>);
+}
+
+export function trackSettingsCliTestResult(
+  track: Track,
+  props: SettingsCliTestResultProps,
+) {
+  track(
+    'settings_cli_test_result',
+    props as unknown as Record<string, unknown>,
+  );
+}
+
+export function trackSettingsByokTestResult(
+  track: Track,
+  props: SettingsByokTestResultProps,
+) {
+  track(
+    'settings_byok_test_result',
+    props as unknown as Record<string, unknown>,
+  );
 }
 
 export function trackStudioViewChatPanel(
