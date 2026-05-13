@@ -41,3 +41,5 @@ services:
 
 volumes:
   open_design_data:
+    external: true
+    name: open_design_data

@@ -33,6 +33,9 @@ RUN corepack enable && \
     pnpm install --frozen-lockfile
 
 COPY apps ./apps
+# The Docker daemon serves a static web bundle behind the VPS proxy auth.
+# Server-only Next auth routes are for Vercel/server output and break static export.
+RUN rm -rf apps/web/app/api/auth
 RUN pnpm --filter @open-design/daemon build && \
     pnpm --filter @open-design/web build && \
     pnpm --filter @open-design/daemon deploy --legacy --prod /app/deploy/daemon && \
