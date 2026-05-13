@@ -9,6 +9,7 @@ import type {
 } from '@open-design/contracts/api/providerModels';
 import { isLoopbackApiHost, validateBaseUrl } from '@open-design/contracts/api/connectionTest';
 import { redactSecrets } from './connectionTest.js';
+import { listCodexModels } from './codexAuthProvider.js';
 
 type ProviderModelsInput = ProviderModelsRequest & { signal?: AbortSignal };
 
@@ -188,6 +189,10 @@ export async function listProviderModels(
   input: ProviderModelsInput,
 ): Promise<ProviderModelsResponse> {
   const start = Date.now();
+  if (input.protocol === 'codex') {
+    return listCodexModels(input.signal);
+  }
+
   if (input.protocol === 'azure') {
     return {
       ok: false,

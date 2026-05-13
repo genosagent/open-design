@@ -15,10 +15,12 @@ services:
       OD_ALLOWED_ORIGINS: ${OPEN_DESIGN_ALLOWED_ORIGINS:-}
       OD_PORT: 7456
       OD_WEB_PORT: ${OPEN_DESIGN_PORT:-7456}
+      OPEN_DESIGN_CODEX_AUTH_FILE: /run/open-design/hermes-auth.json
     ports:
       - "127.0.0.1:${OPEN_DESIGN_PORT:-7456}:7456"
     volumes:
       - open_design_data:/app/.od
+      - /home/genos/.hermes/open-design-deploy/codex-auth.json:/run/open-design/hermes-auth.json:ro
     read_only: true
     tmpfs:
       - /tmp
@@ -41,3 +43,5 @@ services:
 
 volumes:
   open_design_data:
+    external: true
+    name: open_design_data

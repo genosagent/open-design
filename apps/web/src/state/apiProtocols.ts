@@ -59,6 +59,20 @@ export const SUGGESTED_MODELS_BY_PROTOCOL: Record<ApiProtocol, readonly string[]
     'gpt-4o',
     'gpt-4o-mini',
   ],
+  codex: [
+    'gpt-5.5',
+    'gpt-5.5-pro',
+    'gpt-5.4',
+    'gpt-5.4-mini',
+    'gpt-5.3-codex',
+    'gpt-5.2',
+    'gpt-5.1',
+    'gpt-5.1-codex-mini',
+    'gpt-5-codex',
+    'gpt-5',
+    'o4-mini',
+    'o3',
+  ],
   google: [
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
@@ -116,6 +130,7 @@ export const FAST_MODEL_BY_PROTOCOL: Record<ApiProtocol, string> = {
   anthropic: 'claude-haiku-4-5',
   openai: 'gpt-4o-mini',
   azure: 'gpt-4o-mini',
+  codex: 'gpt-5.4-mini',
   google: 'gemini-2.0-flash',
   // Ollama Cloud doesn't have a clean "fast small model" default that
   // works for the LLM memory extractor — the catalog skews to large
@@ -131,6 +146,7 @@ export const API_PROTOCOL_TABS: ReadonlyArray<{
 }> = [
   { id: 'anthropic', title: 'Anthropic' },
   { id: 'openai', title: 'OpenAI' },
+  { id: 'codex', title: 'Codex Auth' },
   { id: 'azure', title: 'Azure OpenAI' },
   { id: 'google', title: 'Google Gemini' },
   { id: 'ollama', title: 'Ollama Cloud' },
@@ -139,6 +155,7 @@ export const API_PROTOCOL_TABS: ReadonlyArray<{
 export const API_PROTOCOL_LABELS: Record<ApiProtocol, string> = {
   anthropic: 'Anthropic API',
   openai: 'OpenAI API',
+  codex: 'Codex Auth',
   azure: 'Azure OpenAI',
   google: 'Google Gemini',
   ollama: 'Ollama Cloud API',
@@ -147,6 +164,7 @@ export const API_PROTOCOL_LABELS: Record<ApiProtocol, string> = {
 export const API_KEY_PLACEHOLDERS: Record<ApiProtocol, string> = {
   anthropic: 'sk-ant-...',
   openai: 'sk-...',
+  codex: 'Uses server Codex login',
   azure: 'azure key',
   google: 'AIza...',
   ollama: 'Ollama API key',
@@ -158,6 +176,7 @@ export const API_KEY_PLACEHOLDERS: Record<ApiProtocol, string> = {
 export const DEFAULT_BASE_URL_BY_PROTOCOL: Record<ApiProtocol, string> = {
   anthropic: 'https://api.anthropic.com',
   openai: 'https://api.openai.com',
+  codex: 'codex-auth://local',
   azure: '',
   google: 'https://generativelanguage.googleapis.com',
   ollama: 'https://ollama.com',
