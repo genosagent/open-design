@@ -3,6 +3,7 @@ import type { ApiProtocol } from '../types';
 const API_PROTOCOL_LABELS: Record<ApiProtocol, string> = {
   anthropic: 'Anthropic API',
   openai: 'OpenAI API',
+  codex: 'Codex Auth',
   azure: 'Azure OpenAI',
   google: 'Google Gemini',
   ollama: 'Ollama Cloud API',
@@ -11,6 +12,7 @@ const API_PROTOCOL_LABELS: Record<ApiProtocol, string> = {
 const API_PROTOCOL_AGENT_IDS: Record<ApiProtocol, string> = {
   anthropic: 'anthropic-api',
   openai: 'openai-api',
+  codex: 'codex-auth',
   azure: 'azure-openai-api',
   google: 'google-gemini-api',
   ollama: 'ollama-cloud-api',

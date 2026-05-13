@@ -12,6 +12,7 @@ import { effectiveMaxTokens } from '../state/maxTokens';
 import type { AppConfig, ChatMessage } from '../types';
 import { streamMessageAnthropicProxy } from './anthropic-compatible';
 import { streamMessageAzure } from './azure-compatible';
+import { streamMessageCodexAuth } from './codex-auth';
 import { streamMessageGoogle } from './google-compatible';
 import { streamMessageOllama } from './ollama-compatible';
 import { isOpenAICompatible, streamMessageOpenAI } from './openai-compatible';
@@ -44,6 +45,9 @@ export async function streamMessage(
   // fallback for configs saved before apiProtocol existed.
   if (cfg.apiProtocol === 'azure') {
     return streamMessageAzure(cfg, system, history, signal, handlers);
+  }
+  if (cfg.apiProtocol === 'codex') {
+    return streamMessageCodexAuth(cfg, system, history, signal, handlers);
   }
   if (cfg.apiProtocol === 'ollama') {
     return streamMessageOllama(cfg, system, history, signal, handlers);

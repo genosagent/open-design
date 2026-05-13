@@ -229,7 +229,9 @@ export function shouldShowCustomModelInput(
 
 export function canRunProviderConnectionTest(
   config: Pick<AppConfig, 'apiKey' | 'baseUrl' | 'model'>,
+  protocol: ApiProtocol,
 ): boolean {
+  if (protocol === 'codex') return Boolean(config.model.trim());
   return (
     Boolean(config.apiKey.trim()) &&
     Boolean(config.baseUrl.trim()) &&
@@ -242,11 +244,13 @@ export function canFetchProviderModels(
   protocol: ApiProtocol,
 ): boolean {
   return (
-    protocol !== 'azure' &&
-    protocol !== 'ollama' &&
-    Boolean(config.apiKey.trim()) &&
-    Boolean(config.baseUrl.trim()) &&
-    isValidApiBaseUrl(config.baseUrl)
+    protocol === 'codex' ? true : (
+      protocol !== 'azure' &&
+      protocol !== 'ollama' &&
+      Boolean(config.apiKey.trim()) &&
+      Boolean(config.baseUrl.trim()) &&
+      isValidApiBaseUrl(config.baseUrl)
+    )
   );
 }
 
@@ -258,8 +262,8 @@ export function providerModelsCacheKey(
 ): string {
   return [
     protocol,
-    baseUrl.trim().replace(/\/+$/, ''),
-    apiKey,
+    protocol === 'codex' ? 'server-auth' : baseUrl.trim().replace(/\/+$/, ''),
+    protocol === 'codex' ? '' : apiKey,
     protocol === 'azure' ? apiVersion.trim() : '',
   ].join('\n');
 }
@@ -2080,7 +2084,7 @@ export function SettingsDialog({
                   })()}
                   {(() => {
                     const running = providerTestState.status === 'running';
-                    const hasRequired = canRunProviderConnectionTest(cfg);
+                    const hasRequired = canRunProviderConnectionTest(cfg, apiProtocol);
                     const disabled = running || !hasRequired;
                     return (
                       <button
@@ -2182,6 +2186,7 @@ export function SettingsDialog({
                   ))}
                 </select>
               </label>
+              {apiProtocol !== 'codex' ? (
               <label className="field">
                 <span className="field-label">{t('settings.apiKey')}</span>
                 <div className="field-row">
@@ -2204,6 +2209,9 @@ export function SettingsDialog({
                   </button>
                 </div>
               </label>
+              ) : (
+                <p className="hint">Codex Auth uses the Codex login on the daemon, so no API key is sent from the browser.</p>
+              )}
               <label className="field">
                 <span className="field-label">
                   {apiProtocol === 'azure'
@@ -2256,6 +2264,7 @@ export function SettingsDialog({
                 chatApiVersion={cfg.apiVersion ?? ''}
                 chatModel={cfg.model}
               />
+              {apiProtocol !== 'codex' ? (
               <label className="field">
                 <span className="field-label">{t('settings.baseUrl')}</span>
                 <input
@@ -2278,6 +2287,7 @@ export function SettingsDialog({
                   </span>
                 ) : null}
               </label>
+              ) : null}
               {apiProtocol === 'azure' ? (
                 <label className="field">
                   <span className="field-label">{t('settings.apiVersion')}</span>

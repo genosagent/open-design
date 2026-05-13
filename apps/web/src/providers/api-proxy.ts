@@ -11,7 +11,8 @@ export async function streamProxyEndpoint(
   signal: AbortSignal,
   handlers: StreamHandlers,
 ): Promise<void> {
-  if (!cfg.apiKey) {
+  const usesServerAuth = endpoint.includes('/codex/');
+  if (!usesServerAuth && !cfg.apiKey) {
     handlers.onError(new Error('Missing API key — open Settings and paste one in.'));
     return;
   }

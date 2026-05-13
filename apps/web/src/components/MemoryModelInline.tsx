@@ -194,7 +194,7 @@ export function MemoryModelInline({
   // instead of the misleading openai-fallback that the daemon used to
   // land on for Claude Code users.
   const effectiveChatProtocol: MemoryExtractionProvider | null =
-    mode === 'api' ? apiProtocol : chatProtocolFromAgent(cliAgentId);
+    mode === 'api' ? (apiProtocol === 'codex' ? 'openai' : apiProtocol) : chatProtocolFromAgent(cliAgentId);
 
   const modelOptions = useMemo<readonly string[]>(() => {
     if (mode === 'api') return SUGGESTED_MODELS_BY_PROTOCOL[apiProtocol];
@@ -228,12 +228,13 @@ export function MemoryModelInline({
     (modelId: string): MemoryExtractionConfigShape => {
       const trimmedModel = modelId.trim();
       if (mode === 'api') {
+        const provider: MemoryExtractionProvider = apiProtocol === 'codex' ? 'openai' : apiProtocol;
         return {
-          provider: apiProtocol,
+          provider,
           model: trimmedModel,
           baseUrl: chatBaseUrl.trim(),
           apiKey: chatApiKey,
-          apiVersion: apiProtocol === 'azure' ? chatApiVersion.trim() : '',
+          apiVersion: provider === 'azure' ? chatApiVersion.trim() : '',
         };
       }
       const provider =
@@ -304,7 +305,7 @@ export function MemoryModelInline({
     const newTail = (chatApiKey || '').slice(-4);
     const azureVersion = apiProtocol === 'azure' ? chatApiVersion.trim() : '';
     const drift =
-      config.provider !== apiProtocol
+      config.provider !== (apiProtocol === 'codex' ? 'openai' : apiProtocol)
       || config.baseUrl !== trimmedBaseUrl
       || config.apiVersion !== azureVersion
       || config.apiKeyTail !== newTail;

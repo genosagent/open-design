@@ -34,6 +34,7 @@ import { diagnoseClaudeCliFailure } from './claude-diagnostics.js';
 import { createCopilotStreamHandler } from './copilot-stream.js';
 import { createJsonEventStreamHandler } from './json-event-stream.js';
 import { agentCliEnvForAgent, validateAgentCliEnv } from './app-config.js';
+import { testCodexProviderConnection } from './codexAuthProvider.js';
 import type { AgentCliEnvPrefs } from './app-config.js';
 import {
   isLoopbackApiHost,
@@ -552,6 +553,9 @@ export async function testProviderConnection(
 ): Promise<ConnectionTestResponse> {
   const start = Date.now();
   const model = String(input.model ?? '');
+  if (input.protocol === 'codex') {
+    return input.signal ? testCodexProviderConnection({ model, signal: input.signal }) : testCodexProviderConnection({ model });
+  }
   const validated = validateBaseUrl(input.baseUrl);
   if (validated.error || !validated.parsed) {
     const kind: ConnectionTestKind = validated.forbidden ? 'forbidden' : 'invalid_base_url';

@@ -1,5 +1,6 @@
 import type { Express } from 'express';
 import type { RouteDeps } from './server-context.js';
+import { buildCodexResponsesPayload, codexHeaders, codexResponsesUrl, extractCodexTextDelta, resolveCodexCredential } from './codexAuthProvider.js';
 
 export interface RegisterChatRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'chat' | 'agents' | 'critique' | 'validation' | 'lifecycle'> {}
 
@@ -122,20 +123,23 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
     const protocol = body.protocol;
     if (
       typeof protocol !== 'string' ||
-      !['anthropic', 'openai', 'azure', 'google', 'ollama'].includes(protocol)
+      !['anthropic', 'openai', 'azure', 'google', 'ollama', 'codex'].includes(protocol)
     ) {
       return sendApiError(
         res,
         400,
         'BAD_REQUEST',
-        'protocol must be one of anthropic|openai|azure|google|ollama',
+        'protocol must be one of anthropic|openai|azure|google|ollama|codex',
       );
     }
     if (
-      typeof body.baseUrl !== 'string' ||
-      typeof body.apiKey !== 'string' ||
-      !body.baseUrl.trim() ||
-      !body.apiKey.trim()
+      protocol !== 'codex' &&
+      (
+        typeof body.baseUrl !== 'string' ||
+        typeof body.apiKey !== 'string' ||
+        !body.baseUrl.trim() ||
+        !body.apiKey.trim()
+      )
     ) {
       return sendApiError(
         res,
@@ -183,28 +187,33 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
         const protocol = body.protocol;
         if (
           typeof protocol !== 'string' ||
-          !['anthropic', 'openai', 'azure', 'google', 'ollama'].includes(protocol)
+          !['anthropic', 'openai', 'azure', 'google', 'ollama', 'codex'].includes(protocol)
         ) {
           return sendApiError(
             res,
             400,
             'BAD_REQUEST',
-            'protocol must be one of anthropic|openai|azure|google|ollama',
+            'protocol must be one of anthropic|openai|azure|google|ollama|codex',
           );
         }
         if (
-          typeof body.baseUrl !== 'string' ||
-          typeof body.apiKey !== 'string' ||
           typeof body.model !== 'string' ||
-          !body.baseUrl.trim() ||
-          !body.apiKey.trim() ||
-          !body.model.trim()
+          !body.model.trim() ||
+          (
+            protocol !== 'codex' &&
+            (
+              typeof body.baseUrl !== 'string' ||
+              typeof body.apiKey !== 'string' ||
+              !body.baseUrl.trim() ||
+              !body.apiKey.trim()
+            )
+          )
         ) {
           return sendApiError(
             res,
             400,
             'BAD_REQUEST',
-            'baseUrl, apiKey, and model are required',
+            protocol === 'codex' ? 'model is required' : 'baseUrl, apiKey, and model are required',
           );
         }
         try {
@@ -684,6 +693,73 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
       sse.end();
     } catch (err: any) {
       console.error(`[proxy:openai] internal error: ${err.message}`);
+      sendProxyError(sse, err.message, { code: 'INTERNAL_ERROR' });
+      sse.end();
+    }
+  });
+
+  app.post('/api/proxy/codex/stream', async (req, res) => {
+    const proxyBody = req.body || {};
+    const { model, systemPrompt, messages } = proxyBody;
+    if (!model) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'model is required');
+    }
+
+    console.log(`[proxy:codex] ${req.method} codex-auth model=${model}`);
+    const payload = buildCodexResponsesPayload(String(model), systemPrompt, messages);
+    const sse = createSseResponse(res);
+    sse.send('start', { model });
+    try {
+      const credential = await resolveCodexCredential();
+      const response = await fetch(codexResponsesUrl(credential), {
+        method: 'POST',
+        headers: codexHeaders(credential),
+        body: JSON.stringify(payload),
+        redirect: 'error',
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[proxy:codex] upstream error: ${response.status} ${redactAuthTokens(errorText)}`);
+        sendProxyError(sse, `Codex error: ${response.status}`, {
+          code: proxyErrorCode(response.status),
+          details: errorText,
+          retryable: response.status === 429 || response.status >= 500,
+        });
+        return sse.end();
+      }
+
+      let ended = false;
+      let sentAnyText = false;
+      await streamUpstreamSse(response, ({ payload: ssePayload, data }: any) => {
+        if (ssePayload === '[DONE]') {
+          sse.send('end', {});
+          ended = true;
+          return true;
+        }
+        if (!data) return false;
+        const streamError = extractStreamErrorMessage(data);
+        if (streamError || data.type === 'response.failed' || data.type === 'response.incomplete') {
+          sendProxyError(sse, `Codex error: ${streamError || data.type}`, { details: data });
+          ended = true;
+          return true;
+        }
+        const delta = extractCodexTextDelta(data);
+        if (delta) {
+          sentAnyText = true;
+          sse.send('delta', { delta });
+        }
+        if (data.type === 'response.completed') {
+          sse.send('end', {});
+          ended = true;
+          return true;
+        }
+        return false;
+      });
+      if (!ended) sse.send('end', { empty: !sentAnyText });
+      sse.end();
+    } catch (err: any) {
+      console.error(`[proxy:codex] internal error: ${err.message}`);
       sendProxyError(sse, err.message, { code: 'INTERNAL_ERROR' });
       sse.end();
     }
