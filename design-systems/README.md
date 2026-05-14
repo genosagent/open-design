@@ -67,9 +67,21 @@ preview at runtime — they're only metadata.
 
 ## Adding your own
 
-Drop a new folder containing a `DESIGN.md` and it shows up on next refresh.
-Add a `> Category: <Group>` line to slot it under an existing group, or use
-any new label and it lands at the bottom of the dropdown.
+Use Settings -> Design Systems -> Create design system, or drop a new folder
+containing a `DESIGN.md` and refresh. Add a `> Category: <Group>` line to slot
+it under an existing group, or use any new label and it lands at the bottom of
+the dropdown.
+
+For production-quality systems, include the full three-file shape:
+
+- `DESIGN.md` - the human design brief, voice, layout rules, and examples.
+- `tokens.css` - a complete `:root` custom-property block matching
+  `_schema/tokens.schema.ts`. The agent pastes this verbatim into artifacts.
+- `components.html` - a compact fixture of representative buttons, cards,
+  inputs, navigation, and responsive behavior using only `var(--*)` tokens.
+
+`DESIGN.md` alone still works, but the three-file shape gives the generator
+concrete constraints and produces much more consistent designs.
 
 ## Refreshing the bundled set
 

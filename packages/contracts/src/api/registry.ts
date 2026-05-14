@@ -232,6 +232,22 @@ export interface InstallSkillResponse {
   skill: SkillSummary;
 }
 
+export interface CreateDesignSystemRequest {
+  id?: string;
+  title: string;
+  category?: string;
+  summary?: string;
+  surface?: 'web' | 'image' | 'video' | 'audio';
+  body: string;
+  tokensCss?: string;
+  fixtureHtml?: string;
+  overwrite?: boolean;
+}
+
+export interface CreateDesignSystemResponse {
+  designSystem: DesignSystemSummary;
+}
+
 export interface InstallDesignSystemResponse {
   designSystem: DesignSystemSummary;
 }

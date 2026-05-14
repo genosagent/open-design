@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { useT } from '../i18n';
 import type { AppConfig } from '../types';
 import type { DesignSystemSummary } from '@open-design/contracts';
 import {
+  createDesignSystem,
   fetchDesignSystem,
   fetchDesignSystems,
 } from '../providers/registry';
@@ -26,10 +27,25 @@ export function DesignSystemsSection({ cfg, setCfg }: Props) {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewBody, setPreviewBody] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createTitle, setCreateTitle] = useState('');
+  const [createCategory, setCreateCategory] = useState('Custom');
+  const [createSummary, setCreateSummary] = useState('');
+  const [createBody, setCreateBody] = useState('');
+  const [createTokensCss, setCreateTokensCss] = useState('');
+  const [createFixtureHtml, setCreateFixtureHtml] = useState('');
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const refreshDesignSystems = useCallback(async () => {
+    const list = await fetchDesignSystems();
+    setDesignSystems(list);
+    return list;
+  }, []);
 
   useEffect(() => {
-    fetchDesignSystems().then(setDesignSystems);
-  }, []);
+    void refreshDesignSystems();
+  }, [refreshDesignSystems]);
 
   const disabledDS = useMemo(
     () => new Set(cfg.disabledDesignSystems ?? []),
@@ -105,6 +121,45 @@ export function DesignSystemsSection({ cfg, setCfg }: Props) {
     });
   }
 
+
+  async function handleCreateDesignSystem(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setCreateBusy(true);
+    setCreateError(null);
+    try {
+      const result = await createDesignSystem({
+        title: createTitle,
+        category: createCategory,
+        summary: createSummary,
+        body: createBody,
+        tokensCss: createTokensCss,
+        fixtureHtml: createFixtureHtml,
+      });
+      if ('error' in result) {
+        setCreateError(result.error);
+        return;
+      }
+      await refreshDesignSystems();
+      setCfg((c) => ({
+        ...c,
+        designSystemId: result.designSystem.id,
+        disabledDesignSystems: (c.disabledDesignSystems ?? []).filter(
+          (id) => id !== result.designSystem.id,
+        ),
+      }));
+      setPreviewId(result.designSystem.id);
+      setPreviewBody(null);
+      setCreateTitle('');
+      setCreateSummary('');
+      setCreateBody('');
+      setCreateTokensCss('');
+      setCreateFixtureHtml('');
+      setCreateOpen(false);
+    } finally {
+      setCreateBusy(false);
+    }
+  }
+
   return (
     <section className="settings-section settings-design-systems">
       <div className="section-head">
@@ -113,6 +168,92 @@ export function DesignSystemsSection({ cfg, setCfg }: Props) {
           <p className="hint">{t('settings.designSystemsHint')}</p>
         </div>
       </div>
+
+
+      <button
+        type="button"
+        className="ghost library-import-toggle"
+        onClick={() => setCreateOpen((value) => !value)}
+      >
+        {createOpen ? 'Close creator' : 'Create design system'}
+      </button>
+
+      {createOpen && (
+        <form className="library-import-form ds-create-form" onSubmit={handleCreateDesignSystem}>
+          <div className="library-import-row">
+            <label>
+              Name
+              <input
+                value={createTitle}
+                onChange={(e) => setCreateTitle(e.target.value)}
+                placeholder="Motileo Mobile"
+                required
+              />
+            </label>
+            <label>
+              Category
+              <input
+                value={createCategory}
+                onChange={(e) => setCreateCategory(e.target.value)}
+                placeholder="Custom"
+              />
+            </label>
+          </div>
+          <label className="library-import-block">
+            Short summary
+            <input
+              value={createSummary}
+              onChange={(e) => setCreateSummary(e.target.value)}
+              placeholder="Warm mobile product system with clear interaction states."
+            />
+          </label>
+          <label className="library-import-block">
+            DESIGN.md
+            <textarea
+              value={createBody}
+              onChange={(e) => setCreateBody(e.target.value)}
+              placeholder="# Motileo Mobile
+
+> Category: Custom
+> Surface: web
+> Mobile design system for...
+
+## 1. Visual Theme..."
+              rows={8}
+              required
+            />
+          </label>
+          <label className="library-import-block">
+            tokens.css
+            <textarea
+              value={createTokensCss}
+              onChange={(e) => setCreateTokensCss(e.target.value)}
+              placeholder=":root {
+  --bg: #f5f4ed;
+  --surface: #faf9f5;
+  --fg: #141413;
+  --accent: #c96442;
+}"
+              rows={6}
+            />
+          </label>
+          <label className="library-import-block">
+            components.html
+            <textarea
+              value={createFixtureHtml}
+              onChange={(e) => setCreateFixtureHtml(e.target.value)}
+              placeholder="<section class=&quot;fixture&quot;>...</section>"
+              rows={6}
+            />
+          </label>
+          {createError && <p className="library-import-error">{createError}</p>}
+          <div className="library-import-actions">
+            <button type="submit" className="primary" disabled={createBusy}>
+              {createBusy ? 'Creating...' : 'Create and use'}
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="library-toolbar">
         <input

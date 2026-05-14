@@ -13,7 +13,7 @@ import {
 } from './skills.js';
 import { listCodexPets, readCodexPetSpritesheet } from './codex-pets.js';
 import { syncCommunityPets } from './community-pets-sync.js';
-import { readDesignSystem } from './design-systems.js';
+import { listDesignSystems, readDesignSystem } from './design-systems.js';
 import { renderDesignSystemPreview } from './design-system-preview.js';
 import { renderDesignSystemShowcase } from './design-system-showcase.js';
 import { listPromptTemplates, readPromptTemplate } from './prompt-templates.js';
@@ -287,7 +287,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
     try {
       const systems = await listAllDesignSystems();
       res.json({
-        designSystems: systems.map(({ body, ...rest }) => rest),
+        designSystems: systems.map(({ body, dir: _dir, ...rest }) => rest),
       });
     } catch (err: any) {
       res.status(500).json({ error: String(err) });
@@ -302,6 +302,70 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       if (body === null)
         return res.status(404).json({ error: 'design system not found' });
       res.json({ id: req.params.id, body });
+    } catch (err: any) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+
+  app.post('/api/design-systems/create', async (req, res) => {
+    try {
+      const payload = req.body ?? {};
+      const title = typeof payload.title === 'string' ? payload.title.trim() : '';
+      const rawBody = typeof payload.body === 'string' ? payload.body.trim() : '';
+      if (!title) return res.status(400).json({ error: 'title is required' });
+      if (!rawBody) return res.status(400).json({ error: 'DESIGN.md body is required' });
+
+      const requestedId = typeof payload.id === 'string' ? payload.id : title;
+      const id = requestedId
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80);
+      if (!id || id === 'create' || id === 'install') {
+        return res.status(400).json({ error: 'invalid design system id' });
+      }
+
+      const builtInIds = new Set((await listDesignSystems(DESIGN_SYSTEMS_DIR)).map((system) => system.id));
+      if (builtInIds.has(id)) {
+        return res.status(409).json({ error: 'cannot overwrite a built-in design system' });
+      }
+
+      const dest = path.join(USER_DESIGN_SYSTEMS_DIR, id);
+      const overwrite = payload.overwrite === true;
+      if (fs.existsSync(dest) && !overwrite) {
+        return res.status(409).json({ error: 'design system already exists' });
+      }
+
+      const category = typeof payload.category === 'string' && payload.category.trim()
+        ? payload.category.trim()
+        : 'Custom';
+      const summary = typeof payload.summary === 'string' && payload.summary.trim()
+        ? payload.summary.trim()
+        : 'Custom design system.';
+      const surface = ['web', 'image', 'video', 'audio'].includes(payload.surface)
+        ? payload.surface
+        : 'web';
+      const hasH1 = /^#\s+/m.test(rawBody);
+      const designMd = hasH1
+        ? rawBody.endsWith('\n') ? rawBody : `${rawBody}\n`
+        : `# ${title}\n\n> Category: ${category}\n> Surface: ${surface}\n> ${summary}\n\n${rawBody}\n`;
+
+      await fs.promises.mkdir(dest, { recursive: true });
+      await fs.promises.writeFile(path.join(dest, 'DESIGN.md'), designMd, 'utf8');
+      if (typeof payload.tokensCss === 'string' && payload.tokensCss.trim()) {
+        await fs.promises.writeFile(path.join(dest, 'tokens.css'), `${payload.tokensCss.trim()}\n`, 'utf8');
+      }
+      if (typeof payload.fixtureHtml === 'string' && payload.fixtureHtml.trim()) {
+        await fs.promises.writeFile(path.join(dest, 'components.html'), `${payload.fixtureHtml.trim()}\n`, 'utf8');
+      }
+
+      const systems = await listAllDesignSystems();
+      const designSystem = systems.find((system) => system.id === id);
+      if (!designSystem) return res.status(500).json({ error: 'created design system was not found in catalog' });
+      const { body: _body, dir: _dir, ...responseSummary } = designSystem;
+      res.json({ designSystem: responseSummary });
     } catch (err: any) {
       res.status(500).json({ error: String(err) });
     }
@@ -603,7 +667,8 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       if (!designSystem) {
         return res.status(500).json({ error: `installed design system was not found in catalog: ${result.dir}` });
       }
-      res.json({ designSystem });
+      const { body: _body, dir: _dir, ...summary } = designSystem;
+      res.json({ designSystem: summary });
     } catch (err: any) {
       res.status(500).json({ error: String(err) });
     }

@@ -14,6 +14,8 @@ import type {
   ChatAttachment,
   CodexPetSummary,
   CodexPetsResponse,
+  CreateDesignSystemRequest,
+  CreateDesignSystemResponse,
   InstallDesignSystemResponse,
   InstallInput,
   InstallSkillResponse,
@@ -1478,6 +1480,23 @@ export async function uninstallSkill(
     const json = await resp.json();
     if (!resp.ok) return { error: json.error ?? 'Uninstall failed' };
     return { ok: true };
+  } catch {
+    return { error: 'Network error' };
+  }
+}
+
+export async function createDesignSystem(
+  input: CreateDesignSystemRequest,
+): Promise<{ designSystem: DesignSystemSummary } | { error: string }> {
+  try {
+    const resp = await fetch('/api/design-systems/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const json = await resp.json();
+    if (!resp.ok) return { error: json.error ?? 'Create failed' };
+    return json as CreateDesignSystemResponse;
   } catch {
     return { error: 'Network error' };
   }

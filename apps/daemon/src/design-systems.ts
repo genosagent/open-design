@@ -16,6 +16,7 @@ export type DesignSystemSummary = {
   swatches: string[];
   surface: DesignSystemSurface;
   body: string;
+  dir: string;
 };
 
 type ColorToken = { name: string; value: string };
@@ -45,6 +46,7 @@ export async function listDesignSystems(root: string): Promise<DesignSystemSumma
         swatches: extractSwatches(raw),
         surface: extractSurface(raw),
         body: raw,
+        dir: path.join(root, entry.name),
       });
     } catch {
       // Skip.
