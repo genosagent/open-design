@@ -190,7 +190,7 @@ export async function listProviderModels(
 ): Promise<ProviderModelsResponse> {
   const start = Date.now();
   if (input.protocol === 'codex') {
-    return listCodexModels(input.signal);
+    return listCodexModels(input.apiKey, input.signal);
   }
 
   if (input.protocol === 'azure') {

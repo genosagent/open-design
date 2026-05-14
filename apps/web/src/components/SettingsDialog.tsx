@@ -231,7 +231,7 @@ export function canRunProviderConnectionTest(
   config: Pick<AppConfig, 'apiKey' | 'baseUrl' | 'model'>,
   protocol: ApiProtocol,
 ): boolean {
-  if (protocol === 'codex') return Boolean(config.model.trim());
+  if (protocol === 'codex') return Boolean(config.apiKey.trim()) && Boolean(config.model.trim());
   return (
     Boolean(config.apiKey.trim()) &&
     Boolean(config.baseUrl.trim()) &&
@@ -244,7 +244,7 @@ export function canFetchProviderModels(
   protocol: ApiProtocol,
 ): boolean {
   return (
-    protocol === 'codex' ? true : (
+    protocol === 'codex' ? Boolean(config.apiKey.trim()) : (
       protocol !== 'azure' &&
       protocol !== 'ollama' &&
       Boolean(config.apiKey.trim()) &&
@@ -263,7 +263,7 @@ export function providerModelsCacheKey(
   return [
     protocol,
     protocol === 'codex' ? 'server-auth' : baseUrl.trim().replace(/\/+$/, ''),
-    protocol === 'codex' ? '' : apiKey,
+    apiKey,
     protocol === 'azure' ? apiVersion.trim() : '',
   ].join('\n');
 }
@@ -2186,9 +2186,8 @@ export function SettingsDialog({
                   ))}
                 </select>
               </label>
-              {apiProtocol !== 'codex' ? (
               <label className="field">
-                <span className="field-label">{t('settings.apiKey')}</span>
+                <span className="field-label">{apiProtocol === 'codex' ? 'Codex auth JSON or access token' : t('settings.apiKey')}</span>
                 <div className="field-row">
                   <input
                     type={showApiKey ? 'text' : 'password'}
@@ -2209,9 +2208,9 @@ export function SettingsDialog({
                   </button>
                 </div>
               </label>
-              ) : (
-                <p className="hint">Codex Auth uses the Codex login on the daemon, so no API key is sent from the browser.</p>
-              )}
+              {apiProtocol === 'codex' ? (
+                <p className="hint">Use your own Codex auth only. Paste an access token, or the JSON from your local ~/.codex/auth.json or Hermes auth export.</p>
+              ) : null}
               <label className="field">
                 <span className="field-label">
                   {apiProtocol === 'azure'

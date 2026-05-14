@@ -7,6 +7,8 @@ import type { ProviderModelOption, ProviderModelsResponse } from '@open-design/c
 const CODEX_DEFAULT_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 const CODEX_CLIENT_VERSION = '0.0.0';
 const CODEX_USER_AGENT = 'codex_cli_rs/0.0.0 (Open Design)';
+const CODEX_OAUTH_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
+const CODEX_OAUTH_TOKEN_URL = 'https://auth.openai.com/oauth/token';
 const CODEX_TIMEOUT_MS = 12_000;
 const SMOKE_PROMPT = 'Reply with only: ok';
 
@@ -29,11 +31,17 @@ interface CodexCredential {
   accessToken: string;
   baseUrl: string;
   accountId?: string;
+  refreshToken?: string;
 }
 
-function codexCredential(accessToken: string, baseUrl: string): CodexCredential {
+function codexCredential(accessToken: string, baseUrl: string, refreshToken?: string): CodexCredential {
   const accountId = accountIdFromToken(accessToken);
-  return accountId ? { accessToken, baseUrl, accountId } : { accessToken, baseUrl };
+  return {
+    accessToken,
+    baseUrl,
+    ...(accountId ? { accountId } : {}),
+    ...(refreshToken ? { refreshToken } : {}),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -79,6 +87,12 @@ function tokenFromObject(value: unknown): string {
   return typeof token === 'string' ? token : '';
 }
 
+function refreshTokenFromObject(value: unknown): string {
+  if (!isRecord(value)) return '';
+  const token = value.refresh_token ?? value.refreshToken;
+  return typeof token === 'string' ? token : '';
+}
+
 function baseUrlFromObject(value: unknown): string {
   if (!isRecord(value)) return '';
   const baseUrl = value.base_url ?? value.baseUrl;
@@ -94,7 +108,7 @@ function credentialFromAuthJson(auth: Record<string, unknown>): CodexCredential 
         const accessToken = tokenFromObject(entry);
         if (!accessToken) continue;
         const baseUrl = baseUrlFromObject(entry) || CODEX_DEFAULT_BASE_URL;
-        return codexCredential(accessToken, baseUrl);
+        return codexCredential(accessToken, baseUrl, refreshTokenFromObject(entry));
       }
     }
   }
@@ -104,7 +118,7 @@ function credentialFromAuthJson(auth: Record<string, unknown>): CodexCredential 
     const openaiCodex = providers['openai-codex'];
     if (isRecord(openaiCodex)) {
       const accessToken = tokenFromObject(openaiCodex.tokens);
-      if (accessToken) return codexCredential(accessToken, CODEX_DEFAULT_BASE_URL);
+      if (accessToken) return codexCredential(accessToken, CODEX_DEFAULT_BASE_URL, refreshTokenFromObject(openaiCodex.tokens));
     }
   }
 
@@ -113,30 +127,65 @@ function credentialFromAuthJson(auth: Record<string, unknown>): CodexCredential 
     const accessToken = tokenFromObject(legacy.tokens) || tokenFromObject(legacy);
     if (accessToken) {
       const baseUrl = baseUrlFromObject(legacy) || CODEX_DEFAULT_BASE_URL;
-      return codexCredential(accessToken, baseUrl);
+      return codexCredential(accessToken, baseUrl, refreshTokenFromObject(legacy.tokens) || refreshTokenFromObject(legacy));
     }
   }
 
   const accessToken = tokenFromObject(auth.tokens);
-  if (accessToken) return codexCredential(accessToken, CODEX_DEFAULT_BASE_URL);
+  if (accessToken) return codexCredential(accessToken, CODEX_DEFAULT_BASE_URL, refreshTokenFromObject(auth.tokens));
   return null;
 }
 
-export async function resolveCodexCredential(): Promise<CodexCredential> {
-  const home = os.homedir();
-  const candidates = [
-    process.env.OPEN_DESIGN_CODEX_AUTH_FILE ?? '',
-    '/run/open-design/hermes-auth.json',
-    path.join(home, '.hermes', 'auth.json'),
-    path.join(home, '.codex', 'auth.json'),
-  ].filter(Boolean);
-  for (const candidate of candidates) {
-    const auth = await readJson(candidate);
-    if (!auth) continue;
-    const credential = credentialFromAuthJson(auth);
-    if (credential) return credential;
+function credentialFromUserSecret(secret: string): CodexCredential | null {
+  const trimmed = secret.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return isRecord(parsed) ? credentialFromAuthJson(parsed) : null;
+    } catch {
+      return null;
+    }
   }
-  throw new Error('Codex auth was not found. Sign in with Codex or Hermes on this VPS first.');
+  return codexCredential(trimmed, CODEX_DEFAULT_BASE_URL);
+}
+
+export async function resolveCodexCredential(userSecret?: string): Promise<CodexCredential> {
+  const userCredential = typeof userSecret === 'string' ? credentialFromUserSecret(userSecret) : null;
+  if (userCredential) return refreshCodexCredential(userCredential);
+  throw new Error('Codex Auth needs your own Codex access token or auth JSON in Settings.');
+}
+
+
+function jwtExpiresSoon(token: string, skewSeconds: number): boolean {
+  const payload = jwtPayload(token);
+  const exp = typeof payload?.exp === 'number' ? payload.exp : 0;
+  if (!exp) return false;
+  return exp <= Math.floor(Date.now() / 1000) + skewSeconds;
+}
+
+async function refreshCodexCredential(credential: CodexCredential): Promise<CodexCredential> {
+  if (!credential.refreshToken || !jwtExpiresSoon(credential.accessToken, 120)) return credential;
+  const form = new URLSearchParams();
+  form.set('grant_type', 'refresh_token');
+  form.set('refresh_token', credential.refreshToken);
+  form.set('client_id', CODEX_OAUTH_CLIENT_ID);
+  const response = await fetch(CODEX_OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: form,
+    redirect: 'error',
+  });
+  if (!response.ok) return credential;
+  const data = await response.json().catch(() => null);
+  if (!isRecord(data) || typeof data.access_token !== 'string' || !data.access_token.trim()) return credential;
+  const nextRefresh = typeof data.refresh_token === 'string' && data.refresh_token.trim()
+    ? data.refresh_token.trim()
+    : credential.refreshToken;
+  return codexCredential(data.access_token.trim(), credential.baseUrl, nextRefresh);
 }
 
 export function codexHeaders(credential: CodexCredential): Record<string, string> {
@@ -202,10 +251,18 @@ async function readHermesCatalogModels(): Promise<ProviderModelOption[]> {
   return out;
 }
 
-export async function listCodexModels(signal?: AbortSignal): Promise<ProviderModelsResponse> {
+export async function listCodexModels(userSecret?: string, signal?: AbortSignal): Promise<ProviderModelsResponse> {
   const start = Date.now();
+  if (!userSecret?.trim()) {
+    return {
+      ok: false,
+      kind: 'auth_failed',
+      latencyMs: Date.now() - start,
+      detail: 'Paste your Codex access token or auth JSON in Settings first.',
+    };
+  }
   try {
-    const credential = await resolveCodexCredential();
+    const credential = await resolveCodexCredential(userSecret);
     const init: RequestInit = { method: 'GET', headers: codexHeaders(credential), redirect: 'error' };
     if (signal) init.signal = signal;
     const response = await fetch(codexModelsUrl(credential), init);
@@ -221,7 +278,7 @@ export async function listCodexModels(signal?: AbortSignal): Promise<ProviderMod
     console.warn(`[provider:models] codex auth catalog failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  const fallback = (await readHermesCatalogModels()).concat(CODEX_FALLBACK_MODELS);
+  const fallback = CODEX_FALLBACK_MODELS;
   const seen = new Set<string>();
   const models = fallback.filter((model) => {
     const id = model.id.trim();
@@ -268,7 +325,7 @@ function parseSseText(raw: string): Array<{ payload: string; data: unknown }> {
     .filter((frame): frame is { payload: string; data: unknown } => frame != null);
 }
 
-export async function testCodexProviderConnection(input: { model: string; signal?: AbortSignal }): Promise<ConnectionTestResponse> {
+export async function testCodexProviderConnection(input: { model: string; userSecret?: string; signal?: AbortSignal }): Promise<ConnectionTestResponse> {
   const start = Date.now();
   const model = input.model.trim();
   if (!model) return { ok: false, kind: 'invalid_model_id', latencyMs: Date.now() - start, model, detail: 'model is required' };
@@ -278,7 +335,7 @@ export async function testCodexProviderConnection(input: { model: string; signal
   else input.signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => controller.abort(), CODEX_TIMEOUT_MS);
   try {
-    const credential = await resolveCodexCredential();
+    const credential = await resolveCodexCredential(input.userSecret);
     const response = await fetch(codexResponsesUrl(credential), { method: 'POST', headers: codexHeaders(credential), body: JSON.stringify(buildCodexResponsesPayload(model, '', [{ role: 'user', content: SMOKE_PROMPT }])), signal: controller.signal, redirect: 'error' });
     const latencyMs = Date.now() - start;
     const rawText = await response.text();

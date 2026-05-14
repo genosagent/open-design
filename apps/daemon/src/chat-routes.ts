@@ -133,19 +133,21 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
       );
     }
     if (
-      protocol !== 'codex' &&
+      typeof body.apiKey !== 'string' ||
+      !body.apiKey.trim() ||
       (
-        typeof body.baseUrl !== 'string' ||
-        typeof body.apiKey !== 'string' ||
-        !body.baseUrl.trim() ||
-        !body.apiKey.trim()
+        protocol !== 'codex' &&
+        (
+          typeof body.baseUrl !== 'string' ||
+          !body.baseUrl.trim()
+        )
       )
     ) {
       return sendApiError(
         res,
         400,
         'BAD_REQUEST',
-        'baseUrl and apiKey are required',
+        protocol === 'codex' ? 'apiKey is required' : 'baseUrl and apiKey are required',
       );
     }
     try {
@@ -199,13 +201,13 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
         if (
           typeof body.model !== 'string' ||
           !body.model.trim() ||
+          typeof body.apiKey !== 'string' ||
+          !body.apiKey.trim() ||
           (
             protocol !== 'codex' &&
             (
               typeof body.baseUrl !== 'string' ||
-              typeof body.apiKey !== 'string' ||
-              !body.baseUrl.trim() ||
-              !body.apiKey.trim()
+              !body.baseUrl.trim()
             )
           )
         ) {
@@ -213,7 +215,7 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
             res,
             400,
             'BAD_REQUEST',
-            protocol === 'codex' ? 'model is required' : 'baseUrl, apiKey, and model are required',
+            protocol === 'codex' ? 'apiKey and model are required' : 'baseUrl, apiKey, and model are required',
           );
         }
         try {
@@ -700,9 +702,9 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
 
   app.post('/api/proxy/codex/stream', async (req, res) => {
     const proxyBody = req.body || {};
-    const { model, systemPrompt, messages } = proxyBody;
-    if (!model) {
-      return sendApiError(res, 400, 'BAD_REQUEST', 'model is required');
+    const { apiKey, model, systemPrompt, messages } = proxyBody;
+    if (!apiKey || !model) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'apiKey and model are required');
     }
 
     console.log(`[proxy:codex] ${req.method} codex-auth model=${model}`);
@@ -710,7 +712,7 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
     const sse = createSseResponse(res);
     sse.send('start', { model });
     try {
-      const credential = await resolveCodexCredential();
+      const credential = await resolveCodexCredential(String(apiKey));
       const response = await fetch(codexResponsesUrl(credential), {
         method: 'POST',
         headers: codexHeaders(credential),

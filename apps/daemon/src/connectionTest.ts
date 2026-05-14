@@ -554,7 +554,7 @@ export async function testProviderConnection(
   const start = Date.now();
   const model = String(input.model ?? '');
   if (input.protocol === 'codex') {
-    return input.signal ? testCodexProviderConnection({ model, signal: input.signal }) : testCodexProviderConnection({ model });
+    return input.signal ? testCodexProviderConnection({ model, userSecret: input.apiKey, signal: input.signal }) : testCodexProviderConnection({ model, userSecret: input.apiKey });
   }
   const validated = validateBaseUrl(input.baseUrl);
   if (validated.error || !validated.parsed) {

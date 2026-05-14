@@ -164,7 +164,7 @@ export const API_PROTOCOL_LABELS: Record<ApiProtocol, string> = {
 export const API_KEY_PLACEHOLDERS: Record<ApiProtocol, string> = {
   anthropic: 'sk-ant-...',
   openai: 'sk-...',
-  codex: 'Uses server Codex login',
+  codex: 'Codex auth JSON or access token',
   azure: 'azure key',
   google: 'AIza...',
   ollama: 'Ollama API key',
